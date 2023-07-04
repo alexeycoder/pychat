@@ -4,17 +4,20 @@ from socket import AF_INET
 
 from common import *
 
+loop = asyncio.new_event_loop()
+connections = dict[socket.socket, str]() # { sock : username }
+server: socket.socket
+
 
 def run_server(address: tuple[str, int]):
     log("Running server...")
+    global server
     server = socket.create_server(address, family=AF_INET, reuse_port=True)
     server.listen()
     server.setblocking(False)
     log("Server listening at {}:{}".format(*address))
 
-    connections: dict[socket.socket, str] = dict()  # { sock : username }
-    loop = asyncio.new_event_loop()
-    loop.create_task(establish_connections(loop, server, connections))
+    loop.create_task(establish_connections())
 
     try:
         loop.run_forever()
@@ -32,9 +35,7 @@ def run_server(address: tuple[str, int]):
         log("Closing all connections and exit...")
 
 
-async def establish_connections(loop: asyncio.AbstractEventLoop,
-                                server: socket.socket,
-                                connections: dict[socket.socket, str]):
+async def establish_connections():
     while True:
         await asyncio.sleep(0)
         guest, addr = await loop.sock_accept(server)
@@ -46,7 +47,7 @@ async def establish_connections(loop: asyncio.AbstractEventLoop,
         # connections.append(client)
         log(
             f"Established connection from {addr}. Waiting for hello message with username...")
-        loop.create_task(handle_guest(loop, guest, connections))
+        loop.create_task(handle_guest(guest))
         # loop.create_task(handle_client(loop, client, connections))
 
 
@@ -58,9 +59,7 @@ async def establish_connections(loop: asyncio.AbstractEventLoop,
 #             conn.shutdown(socket.SHUT_RDWR)
 
 
-async def handle_guest(loop: asyncio.AbstractEventLoop,
-                       guest: socket.socket,
-                       connections: dict[socket.socket, str]):
+async def handle_guest(guest: socket.socket):
     try:
         peername = guest.getpeername()
 
@@ -77,7 +76,7 @@ async def handle_guest(loop: asyncio.AbstractEventLoop,
             username = get_hello_username(data)
             if username:
                 connections[guest] = username
-                loop.create_task(handle_client(loop, guest, connections))
+                loop.create_task(handle_client(guest))
                 log(f"User {username}@{peername} has been registered.")
                 await send_chunk(loop, guest,
                                  message_from_chat_chunk_payload(
@@ -108,9 +107,7 @@ async def handle_guest(loop: asyncio.AbstractEventLoop,
         pass
 
 
-async def handle_client(loop: asyncio.AbstractEventLoop,
-                        client: socket.socket,
-                        connections: dict[socket.socket, str]):
+async def handle_client(client: socket.socket):
     with client:
         try:
             peername = client.getpeername()

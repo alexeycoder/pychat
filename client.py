@@ -1,18 +1,27 @@
+from functools import partial
 import random
 import socket
-from socket import SOCK_STREAM
 import asyncio
 import string
-import time
+from threading import Thread, current_thread
 from common import *
 
+loop = asyncio.new_event_loop()
+conn: socket.socket
+home_thread: Thread
 
-def run_client(address):
+
+def run_client(address: tuple[str, int]):
+    # global loop
+    # loop = asyncio.new_event_loop()
+    global home_thread
+    home_thread = current_thread().ident
+    global conn
     with socket.create_connection(address) as conn:
         conn.setblocking(False)
-        loop = asyncio.new_event_loop()
-        loop.create_task(receive_messages(loop, conn))
-        loop.create_task(say_hello_to_server(loop, conn))
+
+        loop.create_task(_receive_messages())
+        loop.create_task(_say_hello_to_server())
         try:
             loop.run_forever()
         except KeyboardInterrupt:
@@ -21,14 +30,12 @@ def run_client(address):
             conn.shutdown(socket.SHUT_RDWR)
 
 
-async def say_hello_to_server(loop: asyncio.AbstractEventLoop,
-                              conn: socket.socket):
+async def _say_hello_to_server():
     await send_chunk(loop, conn, hello_chunk_payload("Алексей" + str(random.randint(1000, 9999))))
-    await loop.create_task(send_random_messages(loop, conn))
+    # await loop.create_task(_send_random_messages())
 
 
-async def receive_messages(loop: asyncio.AbstractEventLoop,
-                           conn: socket.socket):
+async def _receive_messages():
     while True:
         await asyncio.sleep(0)
         data = await receive_chunk(loop, conn)
@@ -47,8 +54,7 @@ async def receive_messages(loop: asyncio.AbstractEventLoop,
         print("-"*80)
 
 
-async def send_random_messages(loop: asyncio.AbstractEventLoop,
-                               conn: socket.socket):
+async def _send_random_messages():
     cnt = 20
     while cnt > 0:
         cnt -= 1
@@ -66,5 +72,42 @@ async def send_random_messages(loop: asyncio.AbstractEventLoop,
     print('Sending complete!')
 
 
-if __name__ == "__main__":
-    run_client(SERVER_ADDR)
+async def _send_message_async(text):
+    log(f"_invoked async sending: {text}")
+    n = random.randrange(8, 80)
+    s = text + "\n" + "".join(random.choices(
+        string.ascii_uppercase + string.ascii_lowercase, k=n))
+
+    await send_chunk(loop, conn, message_to_chat_chunk_payload(s))
+    print("-"*80)
+    print("_Sent:", s)
+    print("-"*80)
+    await asyncio.sleep(0)
+
+
+def send_message(text):
+    if current_thread() is home_thread:
+        loop.create_task(_send_message_async(text))
+        return
+    loop.call_soon_threadsafe(loop.create_task, _send_message_async(text))
+
+    # def _add_task(func, fut: asyncio.Future):
+    #     try:
+    #         ret = func()
+    #         fut.set_result(ret)
+    #     except Exception as e:
+    #         fut.set_exception(e)
+
+    # log(f"_sending: {text}")
+
+    # fu = asyncio.Future()
+    # loop.call_soon_threadsafe(
+    #     _add_task,
+    #     partial(send_chunk, loop, conn, message_to_chat_chunk_payload(text)),
+    #     fu)
+
+    # log(f"_sending task created: {text}")
+
+
+# if __name__ == "__main__":
+#     run_client(SERVER_ADDR)
