@@ -5,7 +5,8 @@ import json
 PORT = 12345
 LISTEN_ADDR = ("", PORT,)
 SERVER_ADDR = ("localhost", PORT,)
-SERVER_NAME = "Chat Server"
+SERVER_NAME = "Сервер Чата"
+SELF_NAME = "Вы"
 CHARSET = "utf-8"
 BUF_SIZE = 4096
 LEN_PREFIX_DELIMITER = b":"
@@ -24,15 +25,14 @@ async def send_chunk(loop: asyncio.AbstractEventLoop,
     return await loop.sock_sendall(conn, final_msg)
 
 
-async def send_text(loop: asyncio.AbstractEventLoop,
-                    conn: socket.socket,
-                    text: str):
-    return await send_chunk(loop, conn, text.encode(CHARSET))
+# async def send_text(loop: asyncio.AbstractEventLoop,
+#                     conn: socket.socket,
+#                     text: str):
+#     return await send_chunk(loop, conn, text.encode(CHARSET))
 
 
 async def __receive_prefix(loop: asyncio.AbstractEventLoop,
                            conn: socket.socket):
-    # try:
     prefix = bytearray()
     while True:
         portion = await loop.sock_recv(conn, 1)
@@ -45,10 +45,8 @@ async def __receive_prefix(loop: asyncio.AbstractEventLoop,
             return (False, prefix)
 
     prefix_value = int(prefix)
-    log(f"Detected prefixed message (prefix={prefix_value}).")
+    # log(f"Detected prefixed message (prefix={prefix_value}).")
     return (True, prefix_value)
-    # except:
-    #     return None
 
 
 async def receive_chunk(loop: asyncio.AbstractEventLoop,
@@ -89,8 +87,10 @@ def hello_chunk_payload(username: str) -> bytes:
 def get_hello_username(payload: bytes) -> str:
     s = payload.decode(CHARSET)
     d: dict = json.loads(s)
-    assert "type" in d and d["type"] == "hello"
-    return d.get("username", None)
+    if "type" in d and d["type"] == "hello":
+        return d.get("username", None)
+    else:
+        return None
 
 
 # message to chat
@@ -105,8 +105,10 @@ def message_to_chat_chunk_payload(content) -> bytes:
 def get_message_to_chat_content(payload: bytes) -> str:
     s = payload.decode(CHARSET)
     d: dict = json.loads(s)
-    assert "type" in d and d["type"] == "text"
-    return d.get("content", "")
+    if "type" in d and d["type"] == "text":
+        return d.get("content", "")
+    else:
+        return None
 
 
 # message from chat
@@ -119,8 +121,10 @@ def message_from_chat_chunk_payload(username, content) -> bytes:
     return s.encode(CHARSET)
 
 
-def get_message_to_chat_content(payload: bytes) -> tuple[str, str]:
+def get_message_from_chat_content(payload: bytes) -> tuple[str, str]:
     s = payload.decode(CHARSET)
     d: dict = json.loads(s)
-    assert "type" in d and d["type"] == "message"
-    return d.get("username", "Unknown"), d.get("content", "")
+    if "type" in d and d["type"] == "message":
+        return d.get("username", "Unknown"), d.get("content", "")
+    else:
+        return (None, None)

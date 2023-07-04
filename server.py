@@ -12,9 +12,7 @@ def run_server(address: tuple[str, int]):
     server.setblocking(False)
     log("Server listening at {}:{}".format(*address))
 
-    # guest_connections: list[socket.socket] = []  # just fresh connection
-    # list[tuple(socket.socket, str)] = []  # conn + username
-    connections: dict[socket.socket, str] = dict()
+    connections: dict[socket.socket, str] = dict()  # { sock : username }
     loop = asyncio.new_event_loop()
     loop.create_task(establish_connections(loop, server, connections))
 
@@ -78,8 +76,9 @@ async def handle_guest(loop: asyncio.AbstractEventLoop,
             # если получено hello-message с username -- переводим в чат
             username = get_hello_username(data)
             if username:
-                connections.update((guest, username,))
+                connections[guest] = username
                 loop.create_task(handle_client(loop, guest, connections))
+                log(f"User {username}@{peername} has been registered.")
                 await send_chunk(loop, guest,
                                  message_from_chat_chunk_payload(
                                      SERVER_NAME,
@@ -91,26 +90,22 @@ async def handle_guest(loop: asyncio.AbstractEventLoop,
             await send_chunk(loop, guest,
                              message_from_chat_chunk_payload(
                                  SERVER_NAME,
-                                 f"Still waiting for your username....")
+                                 "Still waiting for your username....")
                              )
 
     except asyncio.CancelledError:
-        log(f"Cancelling a handle_guest task for {peername}.")
-        await send_text(loop, guest,
-                        "Connection closed due to server"
-                        + " is shutting down. Bye!\n")
+        log(f"Cancelling handle_guest task for {peername}.")
+        await send_chunk(loop, guest,
+                         message_from_chat_chunk_payload(
+                             SERVER_NAME,
+                             "Connection closed due to server"
+                             + " is shutting down. Bye!\n"))
         await asyncio.sleep(0)
         guest.shutdown(socket.SHUT_RDWR)
         guest.close()
         raise
     finally:
         pass
-
-
-def get_client_name(sender: socket.socket, recipient: socket.socket):
-    if recipient is sender:
-        return "Вы"
-    return sender.getpeername()
 
 
 async def handle_client(loop: asyncio.AbstractEventLoop,
@@ -124,23 +119,45 @@ async def handle_client(loop: asyncio.AbstractEventLoop,
                 await asyncio.sleep(0)
                 data = await receive_chunk(loop, client)
                 if not data:
-                    log(f"Closed connection by {peername}.")
-                    client.shutdown(socket.SHUT_RDWR)
-                    client.close()
                     break
 
-                [await send_chunk(loop, conn, f"{get_client_name(client, conn)}:\n".encode(CHARSET) + data)
-                 for conn in connections]
+                assert client in connections
+                username = connections[client]
+
+                message_content = get_message_to_chat_content(data)
+                if message_content is None:
+                    log(
+                        f"A message of unexpected format received from {username}, {peername}.")
+                    await asyncio.sleep(0)
+                    continue
+
+                # эхо сообщение себе:
+                await send_chunk(loop, client, message_from_chat_chunk_payload(SELF_NAME, message_content))
+                # остальным участникам:
+                [await send_chunk(loop, conn, message_from_chat_chunk_payload(uname, message_content))
+                 for conn, uname in connections.items() if conn is not client]
+
+            # участник закрыл соединение
+            log(f"Closed connection by {peername}.")
+            if client in connections:
+                connections.pop(client)
+            [await send_chunk(loop, conn, message_from_chat_chunk_payload(SERVER_NAME, f"{username} покинул чат."))
+             for conn, uname in connections.items()]
+            client.shutdown(socket.SHUT_RDWR)
+            client.close()
 
         except asyncio.CancelledError:
-            await send_text(loop, client,
-                            "Connection closed due to server"
-                            + " is shutting down. Bye!\n")
-            log(f"Cancelling a handle_client task for {peername}.")
+            log(f"Cancelling handle_client task for {peername}.")
+            await send_chunk(loop, client,
+                             message_from_chat_chunk_payload(
+                                 SERVER_NAME,
+                                 "Connection closed due to server"
+                                 + " is shutting down. Bye!\n"))
+            await asyncio.sleep(0)
             raise
         finally:
             if client in connections:
-                connections.remove(client)
+                connections.pop(client)
 
 
 if __name__ == "__main__":

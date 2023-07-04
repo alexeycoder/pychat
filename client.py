@@ -12,8 +12,7 @@ def run_client(address):
         conn.setblocking(False)
         loop = asyncio.new_event_loop()
         loop.create_task(receive_messages(loop, conn))
-        loop.create_task(send_random_messages(loop, conn))
-
+        loop.create_task(say_hello_to_server(loop, conn))
         try:
             loop.run_forever()
         except KeyboardInterrupt:
@@ -22,19 +21,30 @@ def run_client(address):
             conn.shutdown(socket.SHUT_RDWR)
 
 
+async def say_hello_to_server(loop: asyncio.AbstractEventLoop,
+                              conn: socket.socket):
+    await send_chunk(loop, conn, hello_chunk_payload("Алексей" + str(random.randint(1000, 9999))))
+    await loop.create_task(send_random_messages(loop, conn))
+
+
 async def receive_messages(loop: asyncio.AbstractEventLoop,
                            conn: socket.socket):
     while True:
+        await asyncio.sleep(0)
         data = await receive_chunk(loop, conn)
         if not data:
             log(f"Closed connection by server.")
             break
 
-        msg = data.decode(CHARSET)
+        username, content = get_message_from_chat_content(data)
+        if not username:
+            log("Received message of unexpected format:", data.decode(CHARSET))
+            continue
+
         print("-"*80)
-        print("Received:", msg)
+        print("User:", username)
+        print("Message:", content)
         print("-"*80)
-        await asyncio.sleep(0)
 
 
 async def send_random_messages(loop: asyncio.AbstractEventLoop,
@@ -43,19 +53,15 @@ async def send_random_messages(loop: asyncio.AbstractEventLoop,
     while cnt > 0:
         cnt -= 1
         n = random.randrange(8, 80)
-        s = ''.join(random.choices(
+        s = str(cnt) + "-" + "".join(random.choices(
             string.ascii_uppercase + string.ascii_lowercase + '\n', k=n))
-        # sb = (s + "\n").encode(CHARSET)
-        # sb = str(len(sb)).encode(CHARSET) + LEN_PREFIX_DELIMITER + sb
 
-        await send_text(loop, conn, s + "\n")
+        await send_chunk(loop, conn, message_to_chat_chunk_payload(s))
         print("-"*80)
         print("_Sent:", s)
         print("-"*80)
-        # response = await receive_chunk(loop, conn)
-        # print("_Received: ", response.decode(CHARSET))
         await asyncio.sleep(0)
-        time.sleep(1)
+        await asyncio.sleep(10)
 
     print('Sending complete!')
 
