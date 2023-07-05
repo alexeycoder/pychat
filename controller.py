@@ -33,7 +33,8 @@ def handle_window_close():
 def notify_no_connection():
     client.stop_client()
     messagebox.showerror("Ошибка",
-                         "Не удалось установить соединение: сервер не отвечает.")
+                         "Не удалось установить соединение:\n"
+                         +"сервер не отвечает либо в соединении отказано.")
 
 
 def _ask_username():
@@ -61,6 +62,7 @@ def _ask_address():
             "Адрес чата",
             prompt,
             initialvalue="194.67.74.161:12345"
+            # initialvalue="127.0.0.1:12345"
         )
         if answer is None:
             exit()

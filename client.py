@@ -17,7 +17,7 @@ def run_client(address: tuple[str, int], username: str):
     global conn
     try:
         conn = socket.create_connection(address, timeout=10)
-    except TimeoutError:
+    except (TimeoutError, ConnectionError):
         controller.notify_no_connection()
         return
 
@@ -97,6 +97,8 @@ async def _send_message_async(text):
 
 
 def send_message(text):
+    if conn is None:
+        return
     if current_thread() is home_thread:
         loop.create_task(_send_message_async(text))
         return
@@ -105,9 +107,6 @@ def send_message(text):
 
 def _stop_client():
     print(f"Invoked stop client async.")
-    # for task in asyncio.all_tasks(loop):
-    #     task.cancel()
-    # # loop.run_until_complete(asyncio.sleep(0))
     loop.stop()
 
 
@@ -117,20 +116,6 @@ def stop_client():
         return
     loop.call_soon_threadsafe(_stop_client)
 
-    # def _add_task(func, fut: asyncio.Future):
-    #     try:
-    #         ret = func()
-    #         fut.set_result(ret)
-    #     except Exception as e:
-    #         fut.set_exception(e)
-    # log(f"_sending: {text}")
-    # fu = asyncio.Future()
-    # loop.call_soon_threadsafe(
-    #     _add_task,
-    #     partial(send_chunk, loop, conn, message_to_chat_chunk_payload(text)),
-    #     fu)
-    # log(f"_sending task created: {text}")
 
-
-# if __name__ == "__main__":
-#     run_client(SERVER_ADDR)
+if __name__ == "__main__":
+    controller.run()

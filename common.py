@@ -27,6 +27,7 @@ def log(msg):
     print(msg)
     if log_file:
         log_file.write(msg)
+        log_file.write("\n")
 
 
 def prepare_logger():

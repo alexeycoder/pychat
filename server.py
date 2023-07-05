@@ -74,13 +74,18 @@ async def handle_guest(guest: socket.socket):
             # если получено hello-message с username -- переводим в чат
             username = get_hello_username(data)
             if username:
+                clients_num = len(connections)
+                clients_info = f"Участников онлайн в чате: {clients_num}"
+                if clients_num > 0:
+                    clients_info += "\n" + ", ".join(connections.values())
+
                 connections[guest] = username
                 loop.create_task(handle_client(guest))
                 log(f"User {username}@{peername} has been registered.")
                 await send_chunk(loop, guest,
                                  message_from_chat_chunk_payload(
                                      SERVER_NAME,
-                                     f"Добро пожаловать, {username}.")
+                                     f"Добро пожаловать, {username}. {clients_info}")
                                  )
                 [await send_chunk(loop, conn,
                                   message_from_chat_chunk_payload(
@@ -135,7 +140,7 @@ async def handle_client(client: socket.socket):
                 # эхо сообщение себе:
                 await send_chunk(loop, client, message_from_chat_chunk_payload(SELF_NAME, message_content))
                 # остальным участникам:
-                [await send_chunk(loop, conn, message_from_chat_chunk_payload(uname, message_content))
+                [await send_chunk(loop, conn, message_from_chat_chunk_payload(username, message_content))
                  for conn, uname in connections.items() if conn is not client]
 
             # участник закрыл соединение
@@ -165,6 +170,3 @@ async def handle_client(client: socket.socket):
 
 if __name__ == "__main__":
     run_server(LISTEN_ADDR)
-
-# string to test:
-# fgdnmblfmblfmnbfmnfklnmlkfmnkn fgknlmflkgnm f fnfklgn дылва вплщз пукщзп укзщпABC
