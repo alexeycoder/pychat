@@ -22,3 +22,12 @@
 
 Клиентское приложение двухпоточное: основной поток обслуживает жизненный цикл оконного интерфейса, дополнительный поток обслуживает жизненный цикл сетевого соединения в аналогичном серверу ключе (неблокирующие вызовы сопрограмм в одном потоке).
 
+## Примеры работы:
+
+![example_username](https://github.com/alexeycoder/pychat/assets/109767480/18ef98c4-ef9f-4732-8e3b-a2eb087df908)
+
+![example_server](https://github.com/alexeycoder/pychat/assets/109767480/5659afcc-2464-44bb-b8a7-5e920737f177)
+
+![example_chating](https://github.com/alexeycoder/pychat/assets/109767480/191efbdb-4e86-439d-8e37-3060fc11e25b)
+
+![example_no_connection](https://github.com/alexeycoder/pychat/assets/109767480/2d3b0f83-8ab7-43b6-bd87-976ceca2efd6)
