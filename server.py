@@ -5,11 +5,12 @@ from socket import AF_INET
 from common import *
 
 loop = asyncio.new_event_loop()
-connections = dict[socket.socket, str]() # { sock : username }
+connections = dict[socket.socket, str]()  # { sock : username }
 server: socket.socket
 
 
 def run_server(address: tuple[str, int]):
+    prepare_logger()
     log("Running server...")
     global server
     server = socket.create_server(address, family=AF_INET, reuse_port=True)
@@ -44,11 +45,9 @@ async def establish_connections():
                              SERVER_NAME,
                              "Connection established. Waiting for your username...")
                          )
-        # connections.append(client)
         log(
             f"Established connection from {addr}. Waiting for hello message with username...")
         loop.create_task(handle_guest(guest))
-        # loop.create_task(handle_client(loop, client, connections))
 
 
 # async def finish_connections(loop: asyncio.AbstractEventLoop,
@@ -81,8 +80,14 @@ async def handle_guest(guest: socket.socket):
                 await send_chunk(loop, guest,
                                  message_from_chat_chunk_payload(
                                      SERVER_NAME,
-                                     f"Welcome, {username}.")
+                                     f"Добро пожаловать, {username}.")
                                  )
+                [await send_chunk(loop, conn,
+                                  message_from_chat_chunk_payload(
+                                      SERVER_NAME,
+                                      f"{username} присоединился к чату."
+                                  ))
+                 for conn, uname in connections.items() if conn is not guest]
                 break
 
             # получено что-то, но не hello-message -- продолжаем ждать hello
@@ -108,18 +113,17 @@ async def handle_guest(guest: socket.socket):
 
 
 async def handle_client(client: socket.socket):
+    assert client in connections
+    username = connections[client]
+    peername = client.getpeername()
+
     with client:
         try:
-            peername = client.getpeername()
-
             while True:
                 await asyncio.sleep(0)
                 data = await receive_chunk(loop, client)
                 if not data:
                     break
-
-                assert client in connections
-                username = connections[client]
 
                 message_content = get_message_to_chat_content(data)
                 if message_content is None:
@@ -138,7 +142,9 @@ async def handle_client(client: socket.socket):
             log(f"Closed connection by {peername}.")
             if client in connections:
                 connections.pop(client)
-            [await send_chunk(loop, conn, message_from_chat_chunk_payload(SERVER_NAME, f"{username} покинул чат."))
+            user_left = message_from_chat_chunk_payload(SERVER_NAME,
+                                                        f"{username} покинул чат.")
+            [await send_chunk(loop, conn, user_left)
              for conn, uname in connections.items()]
             client.shutdown(socket.SHUT_RDWR)
             client.close()

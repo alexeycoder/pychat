@@ -1,6 +1,9 @@
 import asyncio
-import socket
 import json
+import os
+import socket
+from datetime import datetime
+from sys import stderr
 
 PORT = 12345
 LISTEN_ADDR = ("", PORT,)
@@ -10,10 +13,41 @@ SELF_NAME = "Вы"
 CHARSET = "utf-8"
 BUF_SIZE = 4096
 LEN_PREFIX_DELIMITER = b":"
+LOGS_PATH = "logs/"
+
+log_file = None
+
+
+def get_timestamp():
+    return datetime.now().strftime("%H:%M:%S")
 
 
 def log(msg):
-    print("log:", msg)
+    msg = f"log {get_timestamp()}: " + msg
+    print(msg)
+    if log_file:
+        log_file.write(msg)
+
+
+def prepare_logger():
+    global log_file
+    if log_file:
+        return
+
+    if not os.path.exists(LOGS_PATH):
+        os.makedirs(LOGS_PATH)
+
+    today_date_str = datetime.now().strftime('%Y-%m-%d')
+    log_file_path = f'{today_date_str}.log'
+    log_file_path = os.path.join(LOGS_PATH, log_file_path)
+
+    try:
+        log_msg = f'\n{get_timestamp()}: START LOGGING\n'
+        log_file = open(log_file_path, 'at', encoding='utf-8')
+        log_file.write(log_msg)
+    except OSError:
+        log_file = None
+        print("Error: unable to write log.", file=stderr)
 
 
 async def send_chunk(loop: asyncio.AbstractEventLoop,
